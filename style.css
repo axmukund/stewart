@@ -216,6 +216,13 @@ select.unit-select option { color: inherit; }
 .results.compact dt { font-size: 15px; color: var(--muted); }
 .results.compact dd { font-size: 18px; margin: 0; font-weight: 800; text-align: right; }
 .results.compact dt sup { font-size: .72em; line-height: 1; vertical-align: super; }
+.results.compact .ref-range {
+  display: block;
+  margin-top: 2px;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--muted);
+}
 .results-actions { margin-top: 10px; display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
 .results-actions button {
   background: transparent; border: 1px solid var(--border);
