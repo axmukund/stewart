@@ -11,6 +11,33 @@
 
 "use strict";
 
+const RESULT_RANGES = {
+  "res-side": { min: 35, max: 40 },
+  "res-sida": { min: 37, max: 43 },
+  "res-sig": { min: 0, max: 6 },
+  "res-ag": { min: 12, max: 20 },
+};
+
+const MOBILE_RESULT_MAP = {
+  "res-side": "mh-side",
+  "res-sida": "mh-sida",
+  "res-sig": "mh-sig",
+};
+
+function setRangeState(resultId, value) {
+  const range = RESULT_RANGES[resultId];
+  const valueEl = el(resultId);
+  const labelEl = document.querySelector('dt[data-result-for="' + resultId + '"]');
+  const mobileEl = MOBILE_RESULT_MAP[resultId] ? el(MOBILE_RESULT_MAP[resultId]) : null;
+  const inRange = !range || !Number.isFinite(value)
+    ? true
+    : value >= range.min && value <= range.max;
+
+  if (valueEl) valueEl.classList.toggle("out-of-range", !inRange);
+  if (labelEl) labelEl.classList.toggle("out-of-range", !inRange);
+  if (mobileEl) mobileEl.classList.toggle("out-of-range", !inRange);
+}
+
 /**
  * Read every input, run the Stewart calculations, update the results
  * panel / mobile-header summary, and re-render the Gamblegram.
@@ -115,6 +142,10 @@ function computeAll() {
   el("res-side").textContent = sidER.toFixed(1) + " mEq/L";
   el("res-sig").textContent  = sigR.toFixed(1)  + " mEq/L";
   el("res-ag").textContent   = ag.toFixed(2)    + " mEq/L";
+  setRangeState("res-sida", sidA);
+  setRangeState("res-side", sidE);
+  setRangeState("res-sig", sig);
+  setRangeState("res-ag", ag);
 
   /* ── Mobile header ── */
   const mhSida = el("mh-sida");

@@ -64,10 +64,43 @@ p.muted { color: var(--muted); margin: 6px 0 18px; }
 footer { margin-top: 14px; color: var(--muted); font-size: 13px; }
 
 /* ═══════════════════════════════════════════════════════════
-   §4  Single-column layout
+   §4  Workspace layout
    ═══════════════════════════════════════════════════════════ */
-/* -- Single-column stack -- */
-section.grid { display: flex; flex-direction: column; gap: 14px; }
+/* -- Default stacked workspace -- */
+.workspace {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+section.grid,
+.analysis-column {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.ion-column,
+.analysis-column { min-width: 0; }
+.controls-above-gamblegram {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+}
+
+@media (min-width: 960px) {
+  .container { max-width: 1360px; }
+  .workspace {
+    display: grid;
+    grid-template-columns: minmax(480px, 1.04fr) minmax(420px, 0.96fr);
+    gap: 18px;
+    align-items: start;
+  }
+  .analysis-column {
+    gap: 16px;
+  }
+  .controls-above-gamblegram {
+    justify-content: flex-end;
+  }
+}
 
 /* ═══════════════════════════════════════════════════════════
    §5  Fieldsets & inputs
@@ -222,6 +255,16 @@ select.unit-select option { color: inherit; }
   font-size: 12px;
   font-weight: 400;
   color: var(--muted);
+}
+.results.compact dt.out-of-range,
+.results.compact dd.out-of-range,
+.mobile-header .mh-item span.out-of-range {
+  color: #f87171;
+}
+body.light .results.compact dt.out-of-range,
+body.light .results.compact dd.out-of-range,
+body.light .mobile-header .mh-item span.out-of-range {
+  color: #b91c1c;
 }
 .results-actions { margin-top: 10px; display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
 .results-actions button {

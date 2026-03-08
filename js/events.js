@@ -16,6 +16,11 @@
 const _useBmp = document.getElementById("use-bmp-hco3");
 const _fixSig = document.getElementById("fix-sig");
 
+function shouldUseLightModeByLocalTime(date = new Date()) {
+  const hour = date.getHours();
+  return hour >= 7 && hour < 19;
+}
+
 function captureCurrentSigTarget() {
   const sigTarget = el("sig-target");
   if (!sigTarget) return;
@@ -177,6 +182,10 @@ if (_mhToggleBtn) {
 
 const _lightToggle = el("toggle-light");
 if (_lightToggle) {
+  const startLight = shouldUseLightModeByLocalTime();
+  _lightToggle.checked = startLight;
+  _lightToggle.defaultChecked = startLight;
+  document.body.classList.toggle("light", startLight);
   _lightToggle.addEventListener("change", (e) =>
     document.body.classList.toggle("light", e.target.checked)
   );

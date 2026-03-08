@@ -11,7 +11,7 @@
   </head>
   <body>
     <!-- ═══════════════════════════════════════════════════════════
-         Main container — single-column card layout
+         Main container
          ═══════════════════════════════════════════════════════════ -->
     <main class="container">
       <h1>Stewart / Figge — acid–base calculator</h1>
@@ -24,9 +24,12 @@
       </div>
 
       <!-- ═══════════════════════════════════════════════════════════
-           Input + results grid (single-column flex layout)
+           Responsive workspace
+           Desktop: ions left, Gamblegram/results right
+           Mobile: stacked in source order
            ═══════════════════════════════════════════════════════════ -->
-      <section class="grid">
+      <section class="workspace">
+        <section class="grid ion-column">
 
         <!-- ── Strong cations ── -->
         <fieldset>
@@ -125,6 +128,9 @@
 
 
 
+        </section>
+
+        <section class="analysis-column">
         <!-- Reset / Gamblegram (SVG stacked-bar chart) -->
         <div class="controls-above-gamblegram">
           <button id="reset" class="btn">Reset values</button>
@@ -166,10 +172,10 @@
         <section class="results compact" aria-live="polite">
           <h2>Results</h2>
           <dl>
-            <dt>SIDe <span class="ref-range">Typical 35–40 mEq/L</span></dt><dd id="res-side">—</dd>
-            <dt>SIDa <span class="ref-range">Typical 37–43 mEq/L</span></dt><dd id="res-sida">—</dd>
-            <dt>SIG</dt><dd id="res-sig">—</dd>
-            <dt>AG (with K<sup>+</sup>)</dt><dd id="res-ag">—</dd>
+            <dt data-result-for="res-side">SIDe <span class="ref-range">Typical 35–40 mEq/L</span></dt><dd id="res-side">—</dd>
+            <dt data-result-for="res-sida">SIDa <span class="ref-range">Typical 37–43 mEq/L</span></dt><dd id="res-sida">—</dd>
+            <dt data-result-for="res-sig">SIG <span class="ref-range">Normal 0–6 mEq/L</span></dt><dd id="res-sig">—</dd>
+            <dt data-result-for="res-ag">AG (with K<sup>+</sup>) <span class="ref-range">Typical 12–20 mEq/L</span></dt><dd id="res-ag">—</dd>
           </dl>
           <!-- Reset button moved above the Gamblegram -->
           <p class="note small-note">Values update live. Use the toggle above to show non‑SI units. <strong>Normal SIG: 0–6 mEq/L.</strong></p>
@@ -203,6 +209,7 @@
             \alpha &\;=\;0.03\;\mathrm{L\cdot mmHg^{-1}}\;\text{(CO}_2\text{ solubility at 37\,°C)}\\[6pt]
             \text{Sum over }i &\;\text{runs over albumin titratable residues (His, Lys, Arg, Asp/Glu, Tyr, N/C termini); Site pK values follow Figge\u2013Fencl v3.0 (implemented in }js/physiology.js\text{).}\\[6pt]
           \end{aligned}\]</div>
+        </section>
         </section>
       </section>
 
