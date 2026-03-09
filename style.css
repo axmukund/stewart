@@ -122,12 +122,18 @@ section.grid,
    ═══════════════════════════════════════════════════════════ */
 /* -- Fieldsets / inputs -- */
 fieldset {
+  width: 100%;
+  min-width: 0;
+  min-inline-size: 0;
+  margin: 0;
   background: var(--glass); border-radius: 8px; padding: 12px;
   border: 1px solid var(--border);
 }
 legend { font-weight: 600; color: var(--accent); }
 label {
-  display: flex; justify-content: space-between; align-items: center;
+  display: flex; justify-content: flex-start; align-items: center;
+  gap: 8px;
+  min-width: 0;
   padding: 6px 0; font-size: 16px; color: var(--fg);
 }
 input[type="number"], input[type="text"] {
@@ -138,7 +144,7 @@ input[type="number"], input[type="text"] {
 }
 input[disabled] { background: rgba(255,255,255,0.01); color: var(--muted); cursor: not-allowed; }
 /* native select pickers (replace sliders) */
-.picker { display: inline-block; min-width: 140px; margin-left: 8px; min-height: 40px; font-size: 16px; }
+.picker { display: inline-block; min-width: 140px; margin-left: 0; min-height: 40px; font-size: 16px; }
 
 /* Reference-range muted styling inside labels */
 .ion-label .muted { color: var(--muted); font-weight: normal; margin-left: 0.35ch; font-size: 0.95em; }
@@ -162,13 +168,23 @@ input[disabled] { background: rgba(255,255,255,0.01); color: var(--muted); curso
 .picker option { color: var(--fg); background: var(--card); }
 
 
-.ion-label { white-space: nowrap; display: inline-block; font-weight: 600; }
+.ion-label { white-space: normal; display: inline-block; font-weight: 600; flex: 1 1 auto; min-width: 0; }
 .ion-label sup, .ion-label sub,
 .gg-legend .item sup, label sup { font-size: .72em; line-height: 1; vertical-align: super; margin-left: 0.05ch; }
 .unit-select {
-  margin-left: 8px; background: transparent;
+  margin-left: 0; background: transparent;
   border: 1px solid var(--input-border); color: inherit;
   padding: 8px 10px; border-radius: 6px; font-size: 14px; min-height: 40px;
+}
+fieldset > label > span:first-child {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+fieldset > label > .picker,
+fieldset > label > .unit-select,
+fieldset > label > input[type="number"],
+fieldset > label > input[type="text"] {
+  flex: 0 0 auto;
 }
 select.unit-select option { color: inherit; }
 .checkbox-row { display: flex; align-items: center; gap: 12px; color: var(--muted); font-size: 16px; padding-top: 6px; }
