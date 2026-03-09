@@ -194,7 +194,7 @@ function renderGamblegram(vals) {
     // full page container. Use a broader aspect ratio to give the labels
     // and legend more horizontal room.
     padTop = Math.max(12, Math.round(W * 0.035));
-    H = Math.round(W * 1.08);
+    H = Math.round(W * 1.18);
   }
 
   // On mobile use narrower bars so labels beside them aren't clipped;

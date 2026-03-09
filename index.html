@@ -132,14 +132,14 @@
 
         <section class="analysis-column">
         <!-- Reset / Gamblegram (SVG stacked-bar chart) -->
-        <div class="controls-above-gamblegram">
-          <button id="reset" class="btn">Reset values</button>
-        </div>
         <!-- ── Computed results (above Gamblegram) ── -->
         <section class="results compact" aria-live="polite">
           <div class="results-head">
-            <h2>Results</h2>
-            <p class="results-head-note"><strong>Normal SIG: 0–6 mEq/L.</strong></p>
+            <div class="results-head-copy">
+              <h2>Results</h2>
+              <p class="results-head-note"><strong>Normal SIG: 0–6 mEq/L.</strong></p>
+            </div>
+            <button id="reset" class="btn">Reset values</button>
           </div>
           <dl class="results-grid">
             <div class="result-card">
@@ -159,9 +159,6 @@
               <dd id="res-ag">—</dd>
             </div>
           </dl>
-          <p class="note small-note">Values update live. Use the toggle above to show non‑SI units.</p>
-          <p class="note small-note">Stewart reference values vary by source. This app shows practical ranges that match its normal-default assumptions: SIDa 37–43 mEq/L and SIDe 35–40 mEq/L.</p>
-          <p class="note small-note">AG here includes K<sup>+</sup>; lab-reported “normal AG” values are often lower when K<sup>+</sup> is omitted.</p>
         </section>
 
         <section class="gamblegram" aria-label="Gamblegram (ion balance)">
@@ -184,6 +181,12 @@
               Export Gamblegram
             </button>
           </div>
+        </section>
+
+        <section class="analysis-notes" aria-label="Interpretation notes">
+          <p class="note small-note">Values update live. Use the toggle above to show non‑SI units.</p>
+          <p class="note small-note">Stewart reference values vary by source. This app shows practical ranges that match its normal-default assumptions: SIDa 37–43 mEq/L and SIDe 35–40 mEq/L.</p>
+          <p class="note small-note">AG here includes K<sup>+</sup>; lab-reported “normal AG” values are often lower when K<sup>+</sup> is omitted.</p>
         </section>
 
         <!-- ── Mobile-only header ── -->
