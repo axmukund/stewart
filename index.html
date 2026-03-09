@@ -52,7 +52,7 @@
             <select id="mg-unit" class="unit-select"><option value="mgdl">mg/dL</option><option value="si">mmol/L</option></select>
             <select id="mg-picker" class="picker" aria-label="Mg picker"></select>
           </label>
-          <div class="field-note">Calculator estimates ionized Mg<sup>2+</sup> from total serum Mg for SIDa and the Gamblegram.</div>
+          <div class="field-note">Calculator estimates ionized Mg<sup>2+</sup> from total serum Mg with a pH adjustment for SIDa and the Gamblegram.</div>
         </fieldset>
 
         <!-- ── Strong anions ── -->
@@ -158,6 +158,11 @@
               <dt data-result-for="res-ag">AG <span class="ref-range">With K<sup>+</sup>, typical 12–20 mEq/L</span></dt>
               <dd id="res-ag">—</dd>
             </div>
+            <div class="result-card">
+              <dt>iMg est <span class="ref-range">Derived from total Mg + pH; qualitative confidence shown below</span></dt>
+              <dd id="res-img">—</dd>
+              <p id="res-img-confidence" class="result-meta">—</p>
+            </div>
           </dl>
         </section>
 
@@ -214,6 +219,7 @@
             [\mathrm{HCO}_3^-]_{\text{fixed SIG}} &= \mathrm{SID_a} - \mathrm{SIG}_{target} - \mathrm{Alb}^- - \mathrm{Phos}^- \\[8pt]
             \mathrm{AG} &= [\mathrm{Na}^+] + [\mathrm{K}^+] - [\mathrm{Cl}^-] - [\mathrm{HCO}_3^-] \\[8pt]
             [\mathrm{HCO}_3^-] &= 0.03\times pCO_2\times 10^{\,\mathrm{pH}\,-\,6.1} \quad\text{(Henderson--Hasselbalch)}\\[10pt]
+            [\mathrm{iMg}^{2+}]_{est} &= \min\!\left([\mathrm{Mg}]_{total},\;\max\!\left(0,\;0.66[\mathrm{Mg}]_{total}+0.039+0.12(7.40-\mathrm{pH})\right)\right)\\[10pt]
             \mathrm{Alb}^- &= -\,\frac{[\mathrm{Alb}]_{g/L}}{66.5}\;\sum_i \frac{n_i\,(\pm 1)}{1+10^{\,\pm(pK_{a,i}\,-\,\mathrm{pH})}}\quad\text{(Figge–Fencl v3.0)}\\[10pt]
             \mathrm{Phos}^- &= [\mathrm{PO_4}]\;\frac{K_1[\mathrm{H}^+]^2 + 2K_1K_2[\mathrm{H}^+] + 3K_1K_2K_3}{[\mathrm{H}^+]^3 + K_1[\mathrm{H}^+]^2 + K_1K_2[\mathrm{H}^+] + K_1K_2K_3}\\[12pt]
             \textbf{Definitions:}\\[4pt]

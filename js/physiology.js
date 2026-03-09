@@ -22,9 +22,24 @@
  *   [5] PubMed 12416286. Adult serum total ↔ ionized magnesium
  *       correlation used here as a pragmatic estimate because iMg
  *       is not routinely measured on standard chemistry panels.
+ *   [6] IFCC guideline (PubMed 15899681): iMg binding in plasma is
+ *       pH-dependent and should be interpreted alongside pH.
+ *   [7] Wang et al. (PubMed 12171493): iMg changes by roughly
+ *       0.12 mmol/L per pH unit across the tested range.
  */
 
 "use strict";
+
+const IMG_PH_REFERENCE = 7.40;
+const IMG_PH_SLOPE = 0.12;
+
+const MG_COMPLEXING_NAME_RULES = [
+  { pattern: /\bcitrate\b/i, label: "citrate", thresholds: [0.5, 1.0], points: [1, 2] },
+  { pattern: /\boxalate\b|\bedta\b/i, label: "oxalate/EDTA", thresholds: [0.25, 0.5], points: [1, 2] },
+  { pattern: /\bsulfate\b|\bsulphate\b/i, label: "sulfate", thresholds: [1.0, 3.0], points: [1, 2] },
+  { pattern: /\bacetate\b/i, label: "acetate", thresholds: [3.0], points: [1] },
+  { pattern: /\bketones?\b|\bbeta[- ]?hydroxybut(?:yrate)?\b|\bacetoacet(?:ate|ic)\b/i, label: "ketones", thresholds: [3.0], points: [1] },
+];
 
 /* ─────────────────────────────────────────────────────────────────────
  *  Henderson–Hasselbalch
@@ -58,18 +73,98 @@ function hco3FromPHandPco2(pH, pCO2) {
  * the two, so the calculator accepts total Mg and estimates iMg for
  * the SID / Gamblegram contribution.
  *
- * The estimate is clamped to [0, totalMg] to avoid impossible values
- * at extreme picker edges where the linear fit would otherwise exceed
- * the entered total concentration.
+ * The estimate starts from the existing total-Mg linear relation and
+ * then applies a pH-centred adjustment using the reported pH slope for
+ * ionized magnesium. The result is clamped to [0, totalMg] to avoid
+ * impossible values at the extreme picker edges.
  *
  * @param {number} totalMg  Total serum magnesium in mmol/L
+ * @param {number} pH       Simultaneous blood/serum pH
  * @returns {number}        Estimated ionized magnesium in mmol/L
  */
-function ionizedMagnesiumFromTotal(totalMg) {
+function ionizedMagnesiumFromTotal(totalMg, pH) {
   if (!Number.isFinite(totalMg)) return NaN;
   if (totalMg <= 0) return 0;
-  const estimate = 0.66 * totalMg + 0.039;
+  let estimate = 0.66 * totalMg + 0.039;
+  if (Number.isFinite(pH)) {
+    estimate += IMG_PH_SLOPE * (IMG_PH_REFERENCE - pH);
+  }
   return Math.max(0, Math.min(totalMg, estimate));
+}
+
+function magnesiumComplexingConfidence(phosphate, extraAnions) {
+  let points = 0;
+  const reasons = [];
+
+  function addReason(text) {
+    if (!text || reasons.includes(text)) return;
+    reasons.push(text);
+  }
+
+  function scoreFromThresholds(value, thresholds, perThresholdPoints) {
+    let out = 0;
+    for (let i = 0; i < thresholds.length; i++) {
+      if (value >= thresholds[i]) out = perThresholdPoints[i];
+    }
+    return out;
+  }
+
+  function joinReasons(items) {
+    if (!items.length) return "";
+    if (items.length === 1) return items[0];
+    if (items.length === 2) return items[0] + " and " + items[1];
+    return items.slice(0, -1).join(", ") + ", and " + items[items.length - 1];
+  }
+
+  if (Number.isFinite(phosphate)) {
+    if (phosphate >= 2.5) {
+      points += 2;
+      addReason("phosphate " + phosphate.toFixed(2) + " mmol/L");
+    } else if (phosphate >= 1.5) {
+      points += 1;
+      addReason("phosphate " + phosphate.toFixed(2) + " mmol/L");
+    }
+  }
+
+  if (Array.isArray(extraAnions)) {
+    extraAnions.forEach((ion) => {
+      if (!ion || !Number.isFinite(ion.concentration) || ion.concentration <= 0) return;
+      const displayName = (ion.labelText || "additional anion").trim();
+      const matchedRule = MG_COMPLEXING_NAME_RULES.find((rule) => rule.pattern.test(displayName));
+      if (matchedRule) {
+        const ionPoints = scoreFromThresholds(
+          ion.concentration,
+          matchedRule.thresholds,
+          matchedRule.points
+        );
+        if (ionPoints > 0) {
+          points += ionPoints;
+          addReason(displayName + " " + ion.concentration.toFixed(1) + " mmol/L");
+        }
+        return;
+      }
+
+      const charge = Number.isFinite(ion.charge) ? ion.charge : 1;
+      const equivalentBurden = Number.isFinite(ion.v) ? ion.v : ion.concentration * charge;
+      if (charge >= 2 && equivalentBurden >= 3) {
+        points += 1;
+        addReason(displayName + " " + ion.concentration.toFixed(1) + " mmol/L");
+      }
+    });
+  }
+
+  let levelKey = "high";
+  if (points >= 3) levelKey = "low";
+  else if (points >= 1) levelKey = "medium";
+
+  const label = levelKey.charAt(0).toUpperCase() + levelKey.slice(1);
+  const shownReasons = reasons.slice(0, 3);
+  if (reasons.length > 3) shownReasons.push("other added anions");
+  const summary = shownReasons.length
+    ? "Reduced by " + joinReasons(shownReasons) + "."
+    : "No flagged phosphate or custom complexing-anion burden.";
+
+  return { label, levelKey, points, summary };
 }
 
 /* ─────────────────────────────────────────────────────────────────────

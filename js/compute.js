@@ -58,10 +58,11 @@ function computeAll() {
   const Phos = getIonSI("phos");
   const pH   = parse("ph");
   const pCO2 = parse("pco2");
-  const iMg  = ionizedMagnesiumFromTotal(MgTotal);
   const extraIons = typeof getAdditionalIonSegments === "function"
     ? getAdditionalIonSegments()
     : { cations: [], anions: [], totalCations: 0, totalAnions: 0 };
+  const iMg  = ionizedMagnesiumFromTotal(MgTotal, pH);
+  const iMgConfidence = magnesiumComplexingConfidence(Phos, extraIons.anions);
 
   /* ── HCO₃ handling ──
    *    By default HCO₃ is derived from the blood-gas (Henderson–
@@ -142,6 +143,20 @@ function computeAll() {
   el("res-side").textContent = sidER.toFixed(1) + " mEq/L";
   el("res-sig").textContent  = sigR.toFixed(1)  + " mEq/L";
   el("res-ag").textContent   = ag.toFixed(2)    + " mEq/L";
+  const iMgEl = el("res-img");
+  const iMgConfidenceEl = el("res-img-confidence");
+  if (iMgEl) {
+    iMgEl.textContent = Number.isFinite(iMg) ? iMg.toFixed(2) + " mmol/L" : "—";
+  }
+  if (iMgConfidenceEl) {
+    iMgConfidenceEl.classList.remove("confidence-high", "confidence-medium", "confidence-low");
+    if (Number.isFinite(MgTotal) && MgTotal > 0) {
+      iMgConfidenceEl.textContent = iMgConfidence.label + " confidence — " + iMgConfidence.summary;
+      iMgConfidenceEl.classList.add("confidence-" + iMgConfidence.levelKey);
+    } else {
+      iMgConfidenceEl.textContent = "—";
+    }
+  }
   setRangeState("res-sida", sidA);
   setRangeState("res-side", sidE);
   setRangeState("res-sig", sig);

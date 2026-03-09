@@ -38,7 +38,7 @@ All strong-ion calculations are performed in charge equivalents.
 | --- | --- | --- |
 | Na, K, Cl | mmol/L | Monovalent species, therefore `mmol/L == mEq/L` |
 | Ionized Ca | mmol/L or mg/dL | Converted to mmol/L, then multiplied by 2 in strong-ion sums |
-| Total Mg | mmol/L or mg/dL | Converted to mmol/L, converted to estimated ionized Mg, then multiplied by 2 in strong-ion sums |
+| Total Mg | mmol/L or mg/dL | Converted to mmol/L, converted to estimated ionized Mg with a pH adjustment, then multiplied by 2 in strong-ion sums |
 | Lactate | mmol/L or mg/dL | Converted to mmol/L and treated as a monovalent anion |
 | Albumin | g/dL | Converted to g/L, then to mmol/L using MW `66.5 g/mmol` |
 | Phosphate | mmol/L or mg/dL | Converted to mmol/L, then multiplied by its pH-dependent mean charge |
@@ -49,6 +49,7 @@ All strong-ion calculations are performed in charge equivalents.
 Implementation notes:
 
 - The magnesium input is **total serum magnesium**, not measured ionized magnesium.
+- The application also reports a qualitative iMg estimate-confidence flag. This flag is interpretive only: it does **not** alter `SIDa`, `SIDe`, `SIG`, or `AG`.
 - The displayed `AG` is `Na + K - Cl - HCO3`, so its reference range is higher than potassium-free AG conventions.
 - The current UI includes an `SBE` field, but `js/compute.js` does not currently incorporate it into any calculation.
 
@@ -61,7 +62,15 @@ $$
 $$
 
 $$
-\mathrm{iMg}_{est} = \min\!\left(\mathrm{Mg}_{total}, \max\!\left(0, 0.66 \times \mathrm{Mg}_{total} + 0.039\right)\right)
+\mathrm{iMg}_{linear} = 0.66 \times \mathrm{Mg}_{total} + 0.039
+$$
+
+$$
+\mathrm{iMg}_{pH} = \mathrm{iMg}_{linear} + 0.12 \times (7.40 - pH)
+$$
+
+$$
+\mathrm{iMg}_{est} = \min\!\left(\mathrm{Mg}_{total}, \max\!\left(0, \mathrm{iMg}_{pH}\right)\right)
 $$
 
 $$
@@ -107,16 +116,60 @@ This is the standard clinical Henderson-Hasselbalch rearrangement used in blood-
 
 ### 2. Magnesium handling
 
-The application does **not** request measured ionized magnesium. Instead, it accepts total serum magnesium and estimates ionized magnesium using a linear relation:
+The application does **not** request measured ionized magnesium. Instead, it accepts total serum magnesium and estimates ionized magnesium with a two-step heuristic:
 
 ```text
-iMg_est = 0.66 * Mg_total + 0.039
-iMg = clamp(iMg_est, lower=0, upper=Mg_total)
+iMg_linear = 0.66 * Mg_total + 0.039
+iMg_pH = iMg_linear + 0.12 * (7.40 - pH)
+iMg = clamp(iMg_pH, lower=0, upper=Mg_total)
 ```
 
 The clamp prevents non-physical values at the extremes of the selectable range.
 
-This is an implementation heuristic rather than a canonical Stewart equation. The rationale is that the strong-ion sum should reflect the freely dissociated divalent cation contribution, whereas routine chemistry panels commonly report only total magnesium. Reproduction of the present implementation therefore requires the relation above; a separate implementation with direct ionized magnesium measurements would ordinarily substitute measured `iMg` directly.
+This remains an implementation heuristic rather than a canonical Stewart equation. The rationale is:
+
+- routine chemistry panels commonly report only total magnesium
+- the IFCC iMg guideline states that magnesium binding is pH-dependent and that pH should be measured alongside iMg
+- Wang et al. reported a pH slope of approximately `0.12 mmol/L per pH unit` for ionized magnesium in the tested specimens
+
+Accordingly, the application keeps the previous total-Mg backbone and applies a small pH-centred correction around `pH 7.40`. Reproduction of the present implementation therefore requires the relation above; a separate implementation with direct ionized magnesium measurements would ordinarily substitute measured `iMg` directly.
+
+### 2b. Qualitative iMg confidence flag
+
+In addition to the point estimate, the results panel shows a qualitative confidence flag for the iMg estimate. This flag does **not** change the strong-ion arithmetic. It is a presentation-layer warning that the total-Mg to iMg mapping is less trustworthy when the entered chemistry suggests a larger complexed magnesium fraction.
+
+The current implementation assigns confidence points as follows:
+
+```text
+confidence_points = 0
+
+if phosphate >= 2.5 mmol/L:
+  confidence_points += 2
+else if phosphate >= 1.5 mmol/L:
+  confidence_points += 1
+
+for each additional anion row:
+  if name matches citrate:
+    +1 at >= 0.5 mmol/L
+    +2 at >= 1.0 mmol/L
+  else if name matches oxalate or EDTA:
+    +1 at >= 0.25 mmol/L
+    +2 at >= 0.5 mmol/L
+  else if name matches sulfate:
+    +1 at >= 1.0 mmol/L
+    +2 at >= 3.0 mmol/L
+  else if name matches acetate or ketones:
+    +1 at >= 3.0 mmol/L
+  else if the row is another polyvalent anion with
+          concentration * charge >= 3 mEq/L:
+    +1
+
+High confidence   => confidence_points = 0
+Medium confidence => confidence_points = 1 or 2
+Low confidence    => confidence_points >= 3
+```
+
+This is a deliberately qualitative rule set. It is informed by the known partition of serum magnesium into ionized, protein-bound, and complexed fractions, and by the fact that citrate can substantially reduce ionized magnesium without a proportionate change in total magnesium. It should therefore be understood as a caution flag, not as a validated uncertainty model.
 
 ### 3. Apparent strong ion difference (`SIDa`)
 
@@ -408,6 +461,10 @@ Implementation-specific and supporting sources:
 8. James Figge. *The Figge-Fencl quantitative physicochemical model of human acid-base physiology* (model v3.0 description). Current site: <https://www.acid-base.org/figge-fencl-model> . Archived model page: <https://web.archive.org/web/20160327122156/http://figge-fencl.org/model.html>
 9. Figge J, Bellomo R, Egi M. *Quantitative relationships among plasma lactate, inorganic phosphorus, albumin, unmeasured anions and the anion gap in lactic acidosis.* J Crit Care. 2018;44:101-110. PubMed: <https://pubmed.ncbi.nlm.nih.gov/29128625/>
 10. Longstreet D, Vink R. *Does the ionized magnesium concentration reflect the total serum magnesium concentration?* Clin Chem. 2009;55(9):1685-1686. PubMed: <https://pubmed.ncbi.nlm.nih.gov/19608851/>
+11. Ben Rayana MC, Burnett RW, Covington AK, et al. *Guidelines for sampling, measuring and reporting ionized magnesium in undiluted serum, plasma or blood: International Federation of Clinical Chemistry and Laboratory Medicine (IFCC): IFCC Scientific Division, Committee on Point of Care Testing.* Clin Chem Lab Med. 2005;43(5):564-569. PubMed: <https://pubmed.ncbi.nlm.nih.gov/15899681/>
+12. Wang S, McDonnell EH, Sedor FA, Toffaletti JG. *pH effects on measurements of ionized calcium and ionized magnesium in blood.* Arch Pathol Lab Med. 2002;126(8):947-950. PubMed: <https://pubmed.ncbi.nlm.nih.gov/12171493/>
+13. Kisters K, Spieker C, Tepel M, Zidek W. *Magnesium fractions in serum of healthy individuals and CAPD patients, measured by an ion-selective electrode and ultrafiltration.* Nephrol Dial Transplant. 1996;11(10):2026-2031. PubMed: <https://pubmed.ncbi.nlm.nih.gov/8740513/>
+14. Ryzen E, Elbaum N, Singer FR, Rude RK. *Importance of ionized magnesium measurement for monitoring of citrate-anticoagulated plateletpheresis.* Transfusion. 1997;37(4):418-422. PubMed: <https://pubmed.ncbi.nlm.nih.gov/9111280/>
 
 Interpretation of the source base:
 
@@ -415,7 +472,11 @@ Interpretation of the source base:
 - References 6-7 provide the historical physicochemical basis for the `pK' = 6.1` and `alpha = 0.03` Henderson-Hasselbalch constants used in the implementation.
 - Reference 8 provides the key implementation source for the **exact** v3.0 albumin residue inventory, N to B transition, and phosphate constants reproduced by the code; it is valuable for implementation fidelity but should not be weighted equivalently to a peer-reviewed clinical review or trial.
 - Reference 9 connects those implementation constants to later peer-reviewed Figge work.
-- Reference 10 supports the general premise that total and ionized magnesium correlate, although the exact linear estimator used here remains a pragmatic implementation choice.
+- Reference 10 supports the general premise that total and ionized magnesium correlate, although the exact total-Mg backbone used here remains a pragmatic implementation choice.
+- Reference 11 is a high-reliability laboratory-medicine guideline and supports the decision to incorporate pH into the estimate.
+- Reference 12 provides the approximate `0.12 mmol/L per pH unit` slope used for the implemented pH-centred adjustment.
+- Reference 13 supports the broader physiology behind the qualitative confidence flag by describing ionized, protein-bound, and complexed magnesium fractions in serum.
+- Reference 14 supports treating citrate burden as a confidence-lowering feature, because citrate infusion can markedly lower ionized magnesium despite much smaller changes in total magnesium.
 
 ## Project structure
 

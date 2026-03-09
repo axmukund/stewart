@@ -328,6 +328,15 @@ select.unit-select option { color: inherit; }
   text-align: left;
   line-height: 1.1;
 }
+.result-meta {
+  margin: 8px 0 0;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--muted);
+}
+.result-meta.confidence-high { color: #34d399; }
+.result-meta.confidence-medium { color: #fbbf24; }
+.result-meta.confidence-low { color: #f87171; }
 .results.compact dt sup { font-size: .72em; line-height: 1; vertical-align: super; }
 .results.compact .ref-range {
   display: block;
@@ -359,6 +368,9 @@ body.light .results.compact dd.out-of-range,
 body.light .mobile-header .mh-item span.out-of-range {
   color: #b91c1c;
 }
+body.light .result-meta.confidence-high { color: #047857; }
+body.light .result-meta.confidence-medium { color: #b45309; }
+body.light .result-meta.confidence-low { color: #b91c1c; }
 .results-actions { margin-top: 10px; display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
 .results-actions button {
   background: transparent; border: 1px solid var(--border);
