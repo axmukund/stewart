@@ -73,15 +73,14 @@ function renderGamblegram(vals) {
   const unknownEl = document.getElementById("gg-unknown");
   if (!svg || !legend || !unknownEl) return;
 
-  /* ── Snapshot previous bar positions for smooth animation ── */
-  const prevRects = {};
-  svg.querySelectorAll("rect.gg-rect").forEach((r) => {
-    const k = r.dataset.key;
-    if (k) prevRects[k] = {
-      y: parseFloat(r.getAttribute("y")) || 0,
-      h: parseFloat(r.getAttribute("height")) || 0,
+  if (!window.__ggState) {
+    window.__ggState = {
+      groupsByKey: {},
+      outsidePointerBound: false,
+      touchBound: false,
     };
-  });
+  }
+  const ggState = window.__ggState;
 
   /* ── Unpack values ── */
   const Na       = vals.Na       || 0;
@@ -226,12 +225,20 @@ function renderGamblegram(vals) {
   const totalA   = sum(anions);
   const maxStack = Math.max(totalC, totalA, 1);
 
-  /* ── Reset SVG (preserve <title> / <desc> for accessibility) ── */
-  const titleTag = svg.querySelector("title");
-  const descTag  = svg.querySelector("desc");
-  svg.innerHTML =
-    (titleTag ? titleTag.outerHTML : "") +
-    (descTag  ? descTag.outerHTML  : "");
+  /* ── Keep accessibility tags + layered groups (live-update path) ── */
+  let segLayer = svg.querySelector("g.gg-segments");
+  if (!segLayer) {
+    segLayer = document.createElementNS("http://www.w3.org/2000/svg", "g");
+    segLayer.setAttribute("class", "gg-segments");
+    svg.appendChild(segLayer);
+  }
+
+  // Cull stale groups if state and DOM drift apart.
+  Object.keys(ggState.groupsByKey).forEach((k) => {
+    const rec = ggState.groupsByKey[k];
+    if (!rec || !rec.group || !segLayer.contains(rec.group)) delete ggState.groupsByKey[k];
+  });
+
   svg.setAttribute("viewBox", "0 0 " + W + " " + (H + padTop + 40));
   // On narrow screens fill the canvas height; on desktop fill the width.
   if (isMobile) {
@@ -308,72 +315,52 @@ function renderGamblegram(vals) {
   const leftLabelYs  = layoutLabelYs(cT);
   const rightLabelYs = layoutLabelYs(aT);
 
-  function addSeg(t, x, lx, anchor, labelY) {
-    const item = t.item;
-    const prev = prevRects[item.k];
-    const sH   = prev ? Math.max(4, prev.h) : 8;
-    const sY   = prev ? prev.y : baseY - sH;
-    const centerY = t.ty + t.th / 2;
-    const startTextY = sY + sH / 2;
+  const labelPad = Math.max(12, Math.round(fSizeNum * 0.85));
+  const targets = [];
+  cT.forEach((t, i) => {
+    targets.push({
+      t,
+      x: leftX,
+      lx: leftX - labelPad,
+      anchor: "end",
+      labelY: leftLabelYs.get(i),
+      order: targets.length,
+    });
+  });
+  aT.forEach((t, i) => {
+    targets.push({
+      t,
+      x: rightX,
+      lx: rightX + barW + labelPad,
+      anchor: "start",
+      labelY: rightLabelYs.get(i),
+      order: targets.length,
+    });
+  });
 
-    const rect = document.createElementNS(NS, "rect");
-    rect.setAttribute("class", "gg-rect");
-    rect.setAttribute("x",      x);
-    rect.setAttribute("y",      sY);
-    rect.setAttribute("width",  barW);
-    rect.setAttribute("height", sH);
-    rect.setAttribute("rx",     8);
-    rect.setAttribute("fill",   item.c);
-    rect.setAttribute("opacity","0.95");
-    rect.setAttribute("tabindex","0");
+  const targetMap = {};
+  targets.forEach((entry) => {
+    const item = entry.t.item;
+    targetMap[item.k] = entry;
+  });
+
+  function setSegmentDataset(rect, item) {
     rect.dataset.key = item.k;
     rect.dataset.val = (item.v || 0).toFixed(2);
     if (item.labelText) rect.dataset.label = item.labelText;
+    else delete rect.dataset.label;
     if (item.isCustom) rect.dataset.custom = "true";
+    else delete rect.dataset.custom;
     if (Number.isFinite(item.concentration)) rect.dataset.concentration = item.concentration.toFixed(2);
+    else delete rect.dataset.concentration;
     if (Number.isFinite(item.charge)) rect.dataset.charge = String(item.charge);
+    else delete rect.dataset.charge;
     if (item.kind) rect.dataset.kind = item.kind;
-    svg.appendChild(rect);
+    else delete rect.dataset.kind;
+  }
 
-    const labelHeight = fSizeNum * 1.2; // estimate text height
-    if (Math.abs(labelY - centerY) > labelHeight * 0.35) {
-      const textEdge = anchor === "end" ? lx + 6 : lx - 6;
-      const x1 = anchor === "end" ? x : x + barW;
-      const y1 = centerY;
-      const x2 = textEdge;
-      const y2 = labelY;
-
-      const underlay = document.createElementNS(NS, "line");
-      underlay.setAttribute("x1", x1);
-      underlay.setAttribute("y1", y1);
-      underlay.setAttribute("x2", x2);
-      underlay.setAttribute("y2", y2);
-      underlay.setAttribute("stroke", guideUnderlay);
-      underlay.setAttribute("stroke-width", "4.2");
-      underlay.setAttribute("stroke-linecap", "round");
-      underlay.setAttribute("opacity", "0.9");
-      svg.appendChild(underlay);
-
-      const guide = document.createElementNS(NS, "line");
-      guide.setAttribute("x1", x1);
-      guide.setAttribute("y1", y1);
-      guide.setAttribute("x2", x2);
-      guide.setAttribute("y2", y2);
-      guide.setAttribute("stroke", guideColor);
-      guide.setAttribute("stroke-width", "2.2");
-      guide.setAttribute("stroke-linecap", "round");
-      guide.setAttribute("opacity", "0.96");
-      svg.appendChild(guide);
-    }
-
-    const text = document.createElementNS(NS, "text");
-    text.classList.add("gg-name");
-    text.setAttribute("x",                lx);
-    text.setAttribute("y",                labelY);
-    text.setAttribute("dominant-baseline", "middle");
-    text.setAttribute("text-anchor",      anchor);
-    text.setAttribute("font-size",        `${fSizeNum}px`);
-
+  function setTextContent(text, item, lx, anchor) {
+    while (text.firstChild) text.removeChild(text.firstChild);
     if (isMobile) {
       const tspanLabel = document.createElementNS(NS, "tspan");
       tspanLabel.setAttribute("x", lx);
@@ -385,8 +372,8 @@ function renderGamblegram(vals) {
       tspanValue.setAttribute("dy", "1.2em");
       tspanValue.classList.add("value");
       const indent = isNaN(fSizeNum) ? 6 : Math.round(fSizeNum * 0.18);
-      if (anchor === "end") tspanValue.setAttribute("dx", `-${indent}`);
-      else tspanValue.setAttribute("dx", `${indent}`);
+      if (anchor === "end") tspanValue.setAttribute("dx", "-" + indent);
+      else tspanValue.setAttribute("dx", "" + indent);
       tspanValue.textContent = item.v.toFixed(2);
 
       text.appendChild(tspanLabel);
@@ -403,21 +390,247 @@ function renderGamblegram(vals) {
       text.appendChild(tspanLabel);
       text.appendChild(tspanValue);
     }
+  }
 
-    svg.appendChild(text);
+  function wireRectInteractivity(rect, getCurrentTooltip) {
+    if (rect.dataset.bound === "true") return;
+    rect.dataset.bound = "true";
 
-    anim.push({
-      rect, text,
-      sY, sH,
-      ty: t.ty, th: t.th,
-      sTextY: startTextY,
-      tTextY: labelY,
+    const setActiveRect = (r) => {
+      svg.classList.add("focused");
+      svg.querySelectorAll("rect.gg-rect.active").forEach((x) => x.classList.remove("active"));
+      r.classList.add("active");
+    };
+    const clearActive = () => {
+      svg.classList.remove("focused");
+      svg.querySelectorAll("rect.gg-rect.active").forEach((x) => x.classList.remove("active"));
+    };
+
+    rect.addEventListener("pointerenter", (e) => {
+      if (e.pointerType === "touch") return;
+      setActiveRect(rect);
+      const handlers = getCurrentTooltip();
+      if (handlers && typeof handlers.show === "function") handlers.show(rect, e.clientX, e.clientY);
+    });
+    rect.addEventListener("pointermove", (e) => {
+      if (e.pointerType === "touch") return;
+      const handlers = getCurrentTooltip();
+      if (handlers && typeof handlers.show === "function") handlers.show(rect, e.clientX, e.clientY);
+    });
+    rect.addEventListener("pointerleave", (e) => {
+      if (e.pointerType === "touch") return;
+      const handlers = getCurrentTooltip();
+      if (handlers && typeof handlers.hide === "function") handlers.hide();
+      if (e.pointerType === "mouse" || e.pointerType === "pen") clearActive();
+    });
+    rect.addEventListener("pointerdown", (e) => {
+      if (e.pointerType === "touch") return;
+      const handlers = getCurrentTooltip();
+      if (!handlers) return;
+      if (rect.classList.contains("active")) {
+        if (typeof handlers.hide === "function") handlers.hide();
+        clearActive();
+      } else {
+        setActiveRect(rect);
+        if (typeof handlers.show === "function") handlers.show(rect, e.clientX, e.clientY);
+      }
+    });
+    rect.addEventListener("focus", () => {
+      setActiveRect(rect);
+      const b = rect.getBoundingClientRect();
+      const handlers = getCurrentTooltip();
+      if (handlers && typeof handlers.show === "function") handlers.show(rect, b.left + 8, b.top);
+    });
+    rect.addEventListener("blur", () => {
+      const handlers = getCurrentTooltip();
+      if (handlers && typeof handlers.hide === "function") handlers.hide();
+      clearActive();
     });
   }
 
-  const labelPad = Math.max(12, Math.round(fSizeNum * 0.85));
-  cT.forEach((t, i) => addSeg(t, leftX,  leftX - labelPad,         "end",   leftLabelYs.get(i)));
-  aT.forEach((t, i) => addSeg(t, rightX, rightX + barW + labelPad, "start", rightLabelYs.get(i)));
+  const currentTooltip = { show: null, hide: null };
+  const getCurrentTooltip = () => currentTooltip;
+
+  const centerFor = (entry) => entry.t.ty + entry.t.th / 2;
+  const labelNeedsGuide = (entry) => {
+    const labelHeight = fSizeNum * 1.2;
+    return Math.abs(entry.labelY - centerFor(entry)) > labelHeight * 0.35;
+  };
+
+  function upsertGuides(rec, entry) {
+    if (!rec) return;
+    const needGuide = labelNeedsGuide(entry);
+    const x1 = entry.anchor === "end" ? entry.x : entry.x + barW;
+    const y1 = centerFor(entry);
+    const textEdge = entry.anchor === "end" ? entry.lx + 6 : entry.lx - 6;
+    const x2 = textEdge;
+    const y2 = entry.labelY;
+
+    if (!needGuide) {
+      if (rec.underlay && rec.underlay.parentNode) rec.underlay.parentNode.removeChild(rec.underlay);
+      if (rec.guide && rec.guide.parentNode) rec.guide.parentNode.removeChild(rec.guide);
+      rec.underlay = null;
+      rec.guide = null;
+      return;
+    }
+
+    if (!rec.underlay) {
+      rec.underlay = document.createElementNS(NS, "line");
+      rec.underlay.setAttribute("stroke-width", "4.2");
+      rec.underlay.setAttribute("stroke-linecap", "round");
+      rec.group.insertBefore(rec.underlay, rec.rect);
+    }
+    if (!rec.guide) {
+      rec.guide = document.createElementNS(NS, "line");
+      rec.guide.setAttribute("stroke-width", "2.2");
+      rec.guide.setAttribute("stroke-linecap", "round");
+      rec.group.insertBefore(rec.guide, rec.rect);
+    }
+
+    rec.underlay.setAttribute("x1", x1);
+    rec.underlay.setAttribute("y1", y1);
+    rec.underlay.setAttribute("x2", x2);
+    rec.underlay.setAttribute("y2", y2);
+    rec.underlay.setAttribute("stroke", guideUnderlay);
+    rec.underlay.setAttribute("opacity", "0.9");
+
+    rec.guide.setAttribute("x1", x1);
+    rec.guide.setAttribute("y1", y1);
+    rec.guide.setAttribute("x2", x2);
+    rec.guide.setAttribute("y2", y2);
+    rec.guide.setAttribute("stroke", guideColor);
+    rec.guide.setAttribute("opacity", "0.96");
+  }
+
+  function createSegmentRecord(entry) {
+    const item = entry.t.item;
+    const group = document.createElementNS(NS, "g");
+    group.setAttribute("class", "gg-seg");
+    group.dataset.key = item.k;
+
+    const rect = document.createElementNS(NS, "rect");
+    rect.setAttribute("class", "gg-rect");
+    rect.setAttribute("x", entry.x);
+    rect.setAttribute("y", baseY - 8);
+    rect.setAttribute("width", barW);
+    rect.setAttribute("height", 8);
+    rect.setAttribute("rx", 8);
+    rect.setAttribute("fill", item.c);
+    rect.setAttribute("opacity", "0.95");
+    rect.setAttribute("tabindex", "0");
+    setSegmentDataset(rect, item);
+
+    const text = document.createElementNS(NS, "text");
+    text.classList.add("gg-name");
+    text.setAttribute("x", entry.lx);
+    text.setAttribute("y", entry.labelY);
+    text.setAttribute("dominant-baseline", "middle");
+    text.setAttribute("text-anchor", entry.anchor);
+    text.setAttribute("font-size", fSizeNum + "px");
+    setTextContent(text, item, entry.lx, entry.anchor);
+
+    group.appendChild(rect);
+    group.appendChild(text);
+    segLayer.appendChild(group);
+
+    const rec = {
+      group,
+      rect,
+      text,
+      underlay: null,
+      guide: null,
+    };
+    upsertGuides(rec, entry);
+    wireRectInteractivity(rect, getCurrentTooltip);
+    return rec;
+  }
+
+  const existingKeys = Object.keys(ggState.groupsByKey);
+  const targetKeys = Object.keys(targetMap);
+  const toRemove = existingKeys.filter((k) => !targetMap[k]);
+
+  // Remove stale keys from selection state.
+  toRemove.forEach((k) => {
+    const rec = ggState.groupsByKey[k];
+    if (rec && rec.rect && rec.rect.classList.contains("active")) {
+      rec.rect.classList.remove("active");
+    }
+  });
+
+  // Update or create target nodes.
+  targets.forEach((entry) => {
+    const item = entry.t.item;
+    let rec = ggState.groupsByKey[item.k];
+    const centerY = centerFor(entry);
+    const targetY = entry.t.ty;
+    const targetH = entry.t.th;
+
+    if (!rec) {
+      rec = createSegmentRecord(entry);
+      ggState.groupsByKey[item.k] = rec;
+    }
+
+    rec.group.dataset.key = item.k;
+    rec.rect.setAttribute("x", entry.x);
+    rec.rect.setAttribute("width", barW);
+    rec.rect.setAttribute("fill", item.c);
+    setSegmentDataset(rec.rect, item);
+
+    rec.text.setAttribute("x", entry.lx);
+    rec.text.setAttribute("text-anchor", entry.anchor);
+    rec.text.setAttribute("font-size", fSizeNum + "px");
+    setTextContent(rec.text, item, entry.lx, entry.anchor);
+
+    upsertGuides(rec, entry);
+
+    const sY = parseFloat(rec.rect.getAttribute("y"));
+    const sH = parseFloat(rec.rect.getAttribute("height"));
+    const startY = Number.isFinite(sY) ? sY : (baseY - 8);
+    const startH = Number.isFinite(sH) ? Math.max(4, sH) : 8;
+    const textY = parseFloat(rec.text.getAttribute("y"));
+    const startTextY = Number.isFinite(textY) ? textY : centerY;
+
+    anim.push({
+      rect: rec.rect,
+      text: rec.text,
+      sY: startY,
+      sH: startH,
+      ty: targetY,
+      th: targetH,
+      sTextY: startTextY,
+      tTextY: entry.labelY,
+    });
+  });
+
+  // Animate removed segments out, then prune.
+  toRemove.forEach((k) => {
+    const rec = ggState.groupsByKey[k];
+    if (!rec || !rec.rect || !rec.text) {
+      delete ggState.groupsByKey[k];
+      return;
+    }
+    const sY = parseFloat(rec.rect.getAttribute("y"));
+    const sH = parseFloat(rec.rect.getAttribute("height"));
+    const textY = parseFloat(rec.text.getAttribute("y"));
+    anim.push({
+      rect: rec.rect,
+      text: rec.text,
+      sY: Number.isFinite(sY) ? sY : baseY - 8,
+      sH: Number.isFinite(sH) ? Math.max(4, sH) : 8,
+      ty: baseY - 1,
+      th: 1,
+      sTextY: Number.isFinite(textY) ? textY : baseY,
+      tTextY: baseY,
+      removeAfter: rec,
+      key: k,
+    });
+  });
+
+  // Keep stack draw order deterministic.
+  targets.sort((a, b) => a.order - b.order).forEach((entry) => {
+    const rec = ggState.groupsByKey[entry.t.item.k];
+    if (rec && rec.group) segLayer.appendChild(rec.group);
+  });
 
   /* ── "Unknown" label under chart ── */
   if (sig >  0.0001)      unknownEl.textContent = "Unknown anions: "  + sig.toFixed(1)           + " mEq/L";
@@ -447,61 +660,10 @@ function renderGamblegram(vals) {
     legend.appendChild(itemEl);
   });
 
-  /* ── Wire up tooltip / selection events (pointer + keyboard + touch) ── */
+  /* ── Wire up shared touch/outside handlers once ── */
   const tooltip = document.getElementById("gg-tooltip");
-  if (tooltip) {
-    // helpers to mark/unmark the active rect and to clear focused state
-    const setActiveRect = (r) => {
-      svg.classList.add("focused");
-      svg.querySelectorAll("rect.gg-rect.active").forEach((x) => x.classList.remove("active"));
-      r.classList.add("active");
-    };
-    const clearActive = () => {
-      svg.classList.remove("focused");
-      svg.querySelectorAll("rect.gg-rect.active").forEach((x) => x.classList.remove("active"));
-    };
-
-    svg.querySelectorAll("rect.gg-rect").forEach((rect) => {
-      // pointerenter / pointermove work for mouse & pen
-      rect.addEventListener("pointerenter", (e) => {
-        if (e.pointerType === "touch") return; // handled by touchstart below
-        setActiveRect(rect);
-        showTT(rect, e.clientX, e.clientY);
-      });
-      rect.addEventListener("pointermove", (e) => {
-        if (e.pointerType !== "touch") showTT(rect, e.clientX, e.clientY);
-      });
-
-      // on leaving with a mouse pointer, hide + clear selection
-      rect.addEventListener("pointerleave", (e) => {
-        if (e.pointerType === "touch") return;
-        hideTT();
-        if (e.pointerType === "mouse" || e.pointerType === "pen") clearActive();
-      });
-
-      // mouse/pen click
-      rect.addEventListener("pointerdown", (e) => {
-        if (e.pointerType === "touch") return; // handled below
-        if (rect.classList.contains("active")) {
-          hideTT(); clearActive();
-        } else {
-          setActiveRect(rect);
-          showTT(rect, e.clientX, e.clientY);
-        }
-      });
-
-      // keyboard navigation
-      rect.addEventListener("focus", () => {
-        setActiveRect(rect);
-        const b = rect.getBoundingClientRect();
-        showTT(rect, b.left + 8, b.top);
-      });
-      rect.addEventListener("blur", () => { hideTT(); clearActive(); });
-    });
-
-    // ── Single SVG-level touch handler for reliable mobile tap ──
-    // Using touchstart (passive:false so we can preventDefault to
-    // stop scroll steal) + elementFromPoint to locate the target rect.
+  if (tooltip && !ggState.touchBound) {
+    ggState.touchBound = true;
     svg.addEventListener("touchstart", (e) => {
       const t   = e.changedTouches[0];
       const hit = document.elementFromPoint(t.clientX, t.clientY);
@@ -509,18 +671,21 @@ function renderGamblegram(vals) {
         ? hit.closest("rect.gg-rect")
         : (hit.classList && hit.classList.contains("gg-rect") ? hit : null));
       if (!rect) return;
-      e.preventDefault(); // prevent scroll steal only when over a segment
+      e.preventDefault();
       if (rect.classList.contains("active")) {
-        hideTT(); clearActive();
+        hideTT();
+        svg.classList.remove("focused");
+        svg.querySelectorAll("rect.gg-rect.active").forEach((x) => x.classList.remove("active"));
       } else {
-        setActiveRect(rect);
+        svg.classList.add("focused");
+        svg.querySelectorAll("rect.gg-rect.active").forEach((x) => x.classList.remove("active"));
+        rect.classList.add("active");
         showTT(rect, t.clientX, t.clientY);
       }
     }, { passive: false });
-
-    // Remove the old SVG-level pointerdown delegation (replaced by touchstart above)
-
-    // clicking / tapping outside the SVG clears any active selection
+  }
+  if (!ggState.outsidePointerBound) {
+    ggState.outsidePointerBound = true;
     document.addEventListener("pointerdown", (ev) => {
       if (!svg.contains(ev.target)) {
         hideTT();
@@ -546,8 +711,17 @@ function renderGamblegram(vals) {
       a.rect.setAttribute("height", Math.max(1, ch));
       a.text.setAttribute("y",      a.sTextY + (a.tTextY - a.sTextY) * e);
     });
-    if (p < 1) window._ggAF = requestAnimationFrame(tick);
-    else       window._ggAF = null;
+    if (p < 1) {
+      window._ggAF = requestAnimationFrame(tick);
+    } else {
+      anim.forEach((a) => {
+        if (!a.removeAfter) return;
+        const rec = a.removeAfter;
+        if (rec.group && rec.group.parentNode) rec.group.parentNode.removeChild(rec.group);
+        if (a.key) delete ggState.groupsByKey[a.key];
+      });
+      window._ggAF = null;
+    }
   }
   window._ggAF = requestAnimationFrame(tick);
 
@@ -612,4 +786,7 @@ function renderGamblegram(vals) {
     tooltip.classList.remove("visible");
     tooltip.setAttribute("aria-hidden", "true");
   }
+
+  currentTooltip.show = showTT;
+  currentTooltip.hide = hideTT;
 }
