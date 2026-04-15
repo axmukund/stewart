@@ -687,6 +687,10 @@ body.light svg.focused rect.gg-rect:not(.active) {
   .picker { -webkit-appearance: menulist-button; appearance: menulist-button; }
   .picker:focus { outline: 2px solid var(--accent); outline-offset: 2px; }
 
+  svg text.gg-name {
+    font-size: calc(var(--gg-label-font-size) - 2px) !important;
+  }
+
   /* Stack label contents vertically so pickers sit below the ion label */
   label { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
   label .ion-label { display: block; }
