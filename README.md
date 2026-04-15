@@ -51,7 +51,6 @@ Implementation notes:
 - The magnesium input is **total serum magnesium**, not measured ionized magnesium.
 - The application also reports a qualitative iMg estimate-confidence flag. This flag is interpretive only: it does **not** alter `SIDa`, `SIDe`, `SIG`, or `AG`.
 - The displayed `AG` is `Na + K - Cl - HCO3`, so its reference range is higher than potassium-free AG conventions.
-- The current UI includes an `SBE` field, but `js/compute.js` does not currently incorporate it into any calculation.
 
 ## Core equations at a glance
 

@@ -163,7 +163,7 @@ if (_resetBtn) _resetBtn.addEventListener("click", () => {
     if (num && num !== sel) num.value = label;
   });
 
-  // Reset other non-picker inputs to their defaultValue (e.g., SBE)
+  // Reset other non-picker inputs to their defaultValue
   document.querySelectorAll("input:not([type=checkbox])").forEach((inp) => {
     if (!inp.id) return;
     const inCfg = PICKER_CONFIG.some((c) => c.id === inp.id);
