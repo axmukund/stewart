@@ -21,7 +21,7 @@ const PICKER_CONFIG = [
   { id: "ica",  min: 0.00, max: 2.00,  step: 0.01, decimals: 2 },
   { id: "mg",   min: 0.00, max: 10.00, step: 0.01, decimals: 2 },
   { id: "cl",   min: 60,   max: 150,   step: 1,    decimals: 0 },
-  { id: "lac",  min: 0.0,  max: 10.0,  step: 0.1,  decimals: 1 },
+  { id: "lac",  min: 0.0,  max: 30.0,  step: 0.1,  decimals: 1 },
   { id: "alb",  min: 0.0,  max: 6.0,   step: 0.1,  decimals: 1 },
   // Phosphate: configured in SI (mmol/L) but default display is mg/dL
   // Display range requested: 0.0–15.0 mg/dL, step 0.1 → convert to mmol/L
